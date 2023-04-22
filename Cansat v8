@@ -1,0 +1,955 @@
+#define CIRCULAR_BUFFER_INT_SAFE
+
+//Bibliotecas gerais
+#include "Wire.h"
+#include "SPI.h"
+#include "math.h"
+#include "CircularBuffer.h"
+#include <Preferences.h>
+
+
+//Bibliotecas de sensores
+
+#include <DFRobot_BMP3XX.h>
+#include "DFRobot_VEML7700.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+
+#include <TinyGPSPlus.h>
+#include <esp_now.h>
+#include <WiFi.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <ESP32Servo.h>
+#include <Buzzer.h>
+
+//enumerations
+enum state { PRE_LAUNCH,
+             GPS_READY,
+             LAUNCH_READY,
+             LAUNCH,
+             ROCKET_RELEASE,
+             APOGGE,
+             PARCHUTE_OPEN,
+             SONDA_RELEASE,
+             TOUCH_DOWN };
+
+state estado = PRE_LAUNCH;
+//COnstantes
+
+//altitude inicial em metros
+const float altitudeInicial = 115;
+
+//252 metro em Pascal
+const float alturaLargadaPascal = 3120;
+
+//COnstantes para smartdelay
+
+// Generally, you should use "unsigned long" for variables that hold time
+// The value will quickly become too large for an int to store
+unsigned long previousMillis = 0;  // will store last time LED was updated
+
+// constants won't change:
+const long intervalStandby = 1000;
+const long intervalMission = 250;
+
+//estruturas
+
+//Estrutura para receber dados das sondas
+typedef struct sonda {
+  int id;
+  float pressao;
+  float temp;
+} sonda;
+
+//estrutura para fazer o check de harware
+
+typedef struct hardware {
+  bool sensorPressao1Check;
+  bool sensorPressao2Check;
+  bool SensorLuzCheck;
+  bool acelerometroCheck;
+  bool gpsCheck;
+  bool apc220Check;
+  bool comunicaSonda1Check;
+  bool ComunicaSonda2Check;
+  bool sensorTemperaturaCheck;
+  bool servoTemperaturaCheck;
+  bool servoSondasCheck;
+  bool EspNowCheck;
+
+
+} hardware;
+
+hardware hardwareCheck;
+
+//estrutura de dados principal
+
+typedef struct Estrutura_dados {
+  int millisegundos;
+  double bmp1Temp;
+  double bmp2Temp;
+  double bmp1Pressure;
+  double bmp2Pressure;
+  double pressaoInicial;
+  double mediaTemp;
+  float bmp1Altitude;
+  float bmp2Altitude;
+  double pressaoNormalizada;
+  double tempInt;
+  double tempExt;
+  float acel_x;
+  float acel_y;
+  float acel_z;
+  // float gyro_x;
+  // float gyro_y;
+  // float gyro_z;
+  float aceleracaoTotal;
+  float luz;
+  float luzLancamento;
+  double gps_Lat;
+  double gps_Long;
+  double gps_Alt;
+  int sonda1_millisegundos;
+  double sonda1_Pressure;
+  int sonda2_millisegundos;
+  double sonda2_Pressure;
+  double pressaoPontoMaisAlto;
+  //flags
+  bool isServoSondaAberto = false;
+  bool isServoTempExternaAberto = false;
+  bool isLancado = false;
+  bool isForaFoguete = false;
+  bool isParaquedasAberto = false;
+  bool isGPSSet = false;
+  bool isPontoMaisAlto = false;
+  bool isSondasLancadas = false;
+  bool isPressaoInicial = false;
+  bool isTOUCH_DOWN = false;
+
+} Estrutura_dados;
+Estrutura_dados dados;
+
+//inicializar entradas/saidas serial
+
+
+HardwareSerial serialGPS(1);
+HardwareSerial SerialAPC(2);
+//Instancia as bibliotecas
+DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOVDD);
+DFRobot_BMP388_I2C bmp388_2(&Wire, bmp388_2.eSDOGND);
+DFRobot_VEML7700 als;
+Adafruit_MPU6050 mpu;
+TinyGPSPlus gps;
+Servo ServoSonda, ServoTemp;
+Buzzer buzzer(25);
+CircularBuffer<double, 4> pressao;
+CircularBuffer<int, 8> pressaoAltura;
+CircularBuffer<int, 3> pressaoAlturaAlcansada;
+CircularBuffer<int, 4> alturaLargada;
+Preferences preferences;
+
+
+// GPIO where the DS18B20 is connected to
+const int oneWireBus = 13;
+
+// Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(oneWireBus);
+
+// Pass our oneWire reference to Dallas Temperature sensor
+DallasTemperature sensors(&oneWire);
+
+//ESP now---------
+
+//Variaveis  ESP now
+sonda myData;
+sonda sonda1;
+sonda sonda2;
+//cria array
+sonda boardsStruct[2] = { sonda1, sonda2 };
+
+//ESP now-------FIM--
+
+
+
+
+
+//Variaveis Globais
+float primeiraPressao;
+float seaLevel1, seaLevel2;
+uint8_t contador = 0;
+float altitude = 0.0;  // initial altitude
+float velocity = 0.0;  // initial velocity
+float dt = 1;          // time interval in seconds
+float prev_altitude = 0.0;
+float prev_velocity = 0.0;
+float prev_acceleration = 0.0;
+int contador1;
+float cabecalhoDados=true;
+
+//class gps tirada do CansatJr Creditos ao Breda e ao Filipe
+class Gps1 {
+private:
+  TinyGPSPlus _parser;
+  unsigned long _lastNewMessage = 0;
+public:
+  void setup() {
+
+    //inicializa gps
+    serialGPS.begin(9600, SERIAL_8N1, 15, 4);
+    if (!serialGPS.available()) {
+      hardwareCheck.gpsCheck = false;
+    } else {
+      hardwareCheck.gpsCheck = true;
+    }
+
+
+
+    // try to get some info right at the start
+    parsePending();
+    delay(200);
+    parsePending();
+  }
+
+  void parsePending() {
+    while (serialGPS.available()) {
+      _parser.encode(serialGPS.read());
+    }
+  }
+
+  double latitude() {
+    return _parser.location.lat();
+  }
+
+  double longitude() {
+    return _parser.location.lng();
+  }
+
+  unsigned long positionAge() {
+    return _parser.location.age();
+  }
+
+  double courseDeg() {
+    return _parser.course.deg();
+  }
+
+  unsigned long courseAge() {
+    return _parser.course.age();
+  }
+
+  double speedMps() {
+    return _parser.speed.mps();
+  }
+
+  unsigned long speedAge() {
+    return _parser.speed.age();
+  }
+
+  double altitudeMeters() {
+    return _parser.altitude.meters();
+  }
+
+  unsigned long altitudeAge() {
+    return _parser.altitude.age();
+  }
+  bool isGPSFix() {
+    float _lat = _parser.location.lat();
+    float _long = _parser.location.lng();
+    if (_lat != 0 & _long != 0) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+} gps1;
+
+//usa 8 pontos para verificar se chegou a altitude máxima
+void isAltitudeMaxima(double pressao) {
+  Serial.print("Isaltitude??");
+  double difrencaPressao;
+  difrencaPressao = pressao - dados.pressaoNormalizada;
+  dados.pressaoNormalizada = pressao;
+  Serial.print("difrencaPressao");
+  Serial.println(difrencaPressao);
+
+  if (difrencaPressao <= 0) {
+    pressaoAltura.push(-1);
+    Serial.println("-1,");
+  } else {
+    pressaoAltura.push(1);
+    Serial.println("1,");
+  }
+  double avg;
+
+  //faz média
+  for (int i = 0; i < 8; i++) {
+
+    avg += pressaoAltura[i];
+  }
+  avg = avg / 8;
+  Serial.print("avg");
+  Serial.println(avg);
+
+  if (avg >= -0, 5 & avg <= 0, 5) {
+    if (!pressaoAlturaAlcansada.isFull()) {
+      pressaoAlturaAlcansada.push(pressao);
+      dados.isPontoMaisAlto = false;
+    } else {
+
+      dados.isPontoMaisAlto = true;
+    }
+  }
+
+  Serial.print("Ponta mais alto?? :");
+  Serial.println(dados.isPontoMaisAlto);
+}
+
+//valor de erro bmp388 147782.31  84460.87//148305.17  83419.17
+void trataPressao() {
+  double novaPressao, trataRPressao;
+  if (dados.bmp1Pressure > 125000) {
+    hardwareCheck.sensorPressao1Check = false;
+    dados.bmp1Pressure = dados.bmp2Pressure;
+  }
+  if (dados.bmp2Pressure > 125000) {
+    hardwareCheck.sensorPressao2Check = false;
+    dados.bmp2Pressure = dados.bmp1Pressure;
+  }
+  double mediaPressao = (dados.bmp1Pressure + dados.bmp2Pressure) / 2;
+  pressao.push(mediaPressao);
+  trataRPressao = (pressao[0] + pressao[1] + pressao[2] + pressao[3]) / 4;
+  if (millis() > 20000 & dados.isPressaoInicial == false) {
+    dados.pressaoInicial = trataRPressao;
+    dados.isPressaoInicial = true;
+    SerialAPC.print("Pressao inicial defenida");
+    Serial.print("Pressao inicial defenida");
+    Beep();
+    delay(100);
+    Beep();
+    delay(100);
+    Beep();
+    delay(100);
+  }
+  //verifica se há 50 metros de altura
+  if (dados.isPressaoInicial == true & dados.pressaoInicial - trataRPressao > 600) {  //valor deve ser 600
+    //trata a pressao normalizada na funcao isAltitudeMaxima();
+    isAltitudeMaxima(trataRPressao);
+  } else {
+    dados.pressaoNormalizada = trataRPressao;
+  }
+}
+double mediaTemperatura() {
+  double tempBmp1, tempBmp2;
+  tempBmp1 = dados.bmp1Temp;
+  tempBmp2 = dados.bmp2Temp;
+  return (tempBmp1 + tempBmp2) / 2;
+}
+void Beep() {
+  buzzer.begin(0);
+  buzzer.sound(NOTE_A3, 200);
+  buzzer.end(100);
+}
+
+void Inicio() {
+  buzzer.begin(0);
+
+  buzzer.sound(NOTE_A3, 500);
+  buzzer.sound(NOTE_A3, 500);
+  buzzer.sound(NOTE_A3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_C4, 125);
+
+  buzzer.sound(NOTE_A3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_A3, 1000);
+
+  buzzer.sound(NOTE_E4, 500);
+  buzzer.sound(NOTE_E4, 500);
+  buzzer.sound(NOTE_E4, 500);
+  buzzer.sound(NOTE_F4, 375);
+  buzzer.sound(NOTE_C4, 125);
+
+  buzzer.sound(NOTE_GS3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_A3, 1000);
+
+  buzzer.sound(NOTE_A4, 500);
+  buzzer.sound(NOTE_A3, 375);
+  buzzer.sound(NOTE_A3, 125);
+  buzzer.sound(NOTE_A4, 500);
+  buzzer.sound(NOTE_GS4, 375);
+  buzzer.sound(NOTE_G4, 125);
+
+  buzzer.sound(NOTE_FS4, 125);
+  buzzer.sound(NOTE_E4, 125);
+  buzzer.sound(NOTE_F4, 250);
+  buzzer.sound(0, 250);
+  buzzer.sound(NOTE_AS3, 250);
+  buzzer.sound(NOTE_DS4, 500);
+  buzzer.sound(NOTE_D4, 375);
+  buzzer.sound(NOTE_CS4, 125);
+
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_B3, 125);
+  buzzer.sound(NOTE_C4, 250);
+  buzzer.sound(0, 250);
+  buzzer.sound(NOTE_F3, 250);
+  buzzer.sound(NOTE_GS3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_A3, 125);
+
+  buzzer.sound(NOTE_C4, 500);
+  buzzer.sound(NOTE_A3, 375);
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_E4, 1000);
+
+  buzzer.sound(NOTE_A4, 500);
+  buzzer.sound(NOTE_A3, 375);
+  buzzer.sound(NOTE_A3, 125);
+  buzzer.sound(NOTE_A4, 500);
+  buzzer.sound(NOTE_GS4, 375);
+  buzzer.sound(NOTE_G4, 125);
+
+  buzzer.sound(NOTE_FS4, 125);
+  buzzer.sound(NOTE_E4, 125);
+  buzzer.sound(NOTE_F4, 250);
+  buzzer.sound(0, 250);
+  buzzer.sound(NOTE_AS3, 250);
+  buzzer.sound(NOTE_DS4, 500);
+  buzzer.sound(NOTE_D4, 375);
+  buzzer.sound(NOTE_CS4, 125);
+
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_B3, 125);
+  buzzer.sound(NOTE_C4, 250);
+  buzzer.sound(0, 250);
+  buzzer.sound(NOTE_F3, 250);
+  buzzer.sound(NOTE_GS3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_C4, 125);
+
+  buzzer.sound(NOTE_A3, 500);
+  buzzer.sound(NOTE_F3, 375);
+  buzzer.sound(NOTE_C4, 125);
+  buzzer.sound(NOTE_A3, 1000);
+
+  buzzer.end(0);
+}
+//funcoes de estado
+void AbreServoTemp() {
+  ServoTemp.write(0);
+  dados.isServoSondaAberto = true;
+  delay(250);
+}
+void FechaServoTemp() {
+  ServoTemp.write(90);
+  dados.isServoSondaAberto = false;
+  delay(250);
+}
+void AbreServoSonda() {
+  ServoSonda.write(0);
+  dados.isServoSondaAberto = true;
+  delay(250);
+}
+void FechaServoSonda() {
+  ServoSonda.write(90);
+  dados.isServoSondaAberto = false;
+  delay(250);
+}
+void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
+  char macStr[18];
+  // Serial.print("Packet received from: ");
+  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+  // Serial.println(macStr);
+  memcpy(&myData, incomingData, sizeof(myData));
+  // Serial.printf("Board ID %u: %u bytes\n", myData.id, len);
+  // Update the structures with the new incoming data
+  boardsStruct[myData.id - 1].pressao = myData.pressao;
+  boardsStruct[myData.id - 1].temp = myData.temp;
+  //   Serial.printf("x value: %d \n", boardsStruct[myData.id - 1].pressao);
+  //   Serial.printf("y value: %d \n", boardsStruct[myData.id - 1].temp);
+  //   Serial.println();
+}
+
+void lerSondas() {
+  dados.sonda1_Pressure = boardsStruct[0].pressao;
+  dados.sonda2_Pressure = boardsStruct[1].pressao;
+}
+
+/* Globals */
+void lerTemperaturaInterior() {
+  sensors.requestTemperatures();
+  float temperatureC = sensors.getTempCByIndex(0);
+  Serial.print("Temperatura dallas");
+  Serial.print(temperatureC);
+  Serial.println("ºC");
+}
+void enviarDados() {
+if(cabecalhoDados==true){
+ SerialAPC.print("/*");
+  //1
+  SerialAPC.print("tempo");
+  SerialAPC.print(",");
+  //2
+  SerialAPC.print("Pressao");
+  SerialAPC.print(",");
+  //3
+  SerialAPC.print("Temperatura");
+  SerialAPC.print(",");
+
+  //4
+  SerialAPC.print("Latitude ");
+  SerialAPC.print(",");
+  //5
+  SerialAPC.print("Longitude");
+  SerialAPC.print(",");
+
+  //6
+  SerialAPC.print("AltitudeGPS");
+  SerialAPC.print(",");
+  //7
+  SerialAPC.print("Luz");
+  SerialAPC.print(",");
+  //8
+  SerialAPC.print("aceleracaox");
+  SerialAPC.print(",");
+  //9
+  SerialAPC.print("aceleracaoy");
+  SerialAPC.print(",");
+  //10
+  SerialAPC.print("temperaturaExterior");
+  SerialAPC.print(",");
+  //11
+  SerialAPC.print("aceleracaoz");
+  SerialAPC.print(",");
+ SerialAPC.print("Sonda1 Tempo");
+  SerialAPC.print(",");
+  //16
+  SerialAPC.print("Sonda1 Pressao");
+  SerialAPC.print(",");
+  //17
+  SerialAPC.print("Sonda 2 tempo");
+  SerialAPC.print(",");
+  //18
+  SerialAPC.print("Sonda 2 Pressao");
+  SerialAPC.println("*/");
+cabecalhoDados=false;
+
+}
+
+
+
+  SerialAPC.print("/*");
+  //1
+  SerialAPC.print(dados.millisegundos);
+  SerialAPC.print(",");
+  //2
+  SerialAPC.print(dados.pressaoNormalizada);
+  SerialAPC.print(",");
+  //3
+  SerialAPC.print(dados.mediaTemp);
+  SerialAPC.print(",");
+
+  //4
+  SerialAPC.print(dados.gps_Lat, 6);
+  SerialAPC.print(",");
+  //5
+  SerialAPC.print(dados.gps_Long, 6);
+  SerialAPC.print(",");
+
+  //6
+  SerialAPC.print(dados.gps_Alt);
+  SerialAPC.print(",");
+  //7
+  SerialAPC.print(dados.luz);
+  SerialAPC.print(",");
+  //8
+  SerialAPC.print(dados.acel_x);
+  SerialAPC.print(",");
+  //9
+  SerialAPC.print(dados.acel_y);
+  SerialAPC.print(",");
+  //10
+  SerialAPC.print(dados.bmp2Temp);
+  SerialAPC.print(",");
+  //11
+  SerialAPC.print(dados.acel_z);
+  SerialAPC.print(",");
+  //12
+  // SerialAPC.print(dados.gyro_x);
+  // SerialAPC.print(",");
+  // //13
+  // SerialAPC.print(dados.gyro_y);
+  // SerialAPC.print(",");
+  // //14
+  // SerialAPC.print(dados.gyro_z);
+  // SerialAPC.print(",");
+
+  //15
+  SerialAPC.print(dados.sonda1_millisegundos);
+  SerialAPC.print(",");
+  //16
+  SerialAPC.print(dados.sonda1_Pressure);
+  SerialAPC.print(",");
+  //17
+  SerialAPC.print(dados.sonda2_millisegundos);
+  SerialAPC.print(",");
+  //18
+  SerialAPC.print(dados.sonda2_Pressure);
+  SerialAPC.println("*/");
+}
+
+void lerGPS() {
+  gps1.parsePending();
+
+  dados.isGPSSet = gps1.isGPSFix();
+
+  dados.gps_Lat = gps1.latitude();
+
+  dados.gps_Long = gps1.longitude();
+
+  dados.gps_Alt = gps1.altitudeMeters();
+}
+
+void lerAceleracao() {
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+  Serial.print("Acceleration X: ");
+  Serial.print(a.acceleration.x);
+  dados.acel_x = -a.acceleration.x;
+  Serial.print(", Y: ");
+  Serial.print(a.acceleration.y);
+  dados.acel_y = a.acceleration.y;
+  Serial.print(", Z: ");
+  Serial.println(a.acceleration.z);
+  dados.acel_z = -a.acceleration.z;
+  dados.aceleracaoTotal = sqrt(pow(dados.acel_x, 2) + pow(dados.acel_y, 2) + pow(dados.acel_z, 2));
+  Serial.print("Aceleração total: ");
+  Serial.println(dados.aceleracaoTotal);
+  if (estado == LAUNCH_READY & (dados.aceleracaoTotal > 30 || dados.pressaoNormalizada < dados.pressaoInicial - 300)) {
+
+    dados.isLancado = true;
+    estado = LAUNCH;
+    dados.luzLancamento = lerLuz();
+  }
+}
+
+
+void lerPressao1() {
+
+  dados.bmp1Pressure = bmp388.readPressPa();
+  Serial.print("Pressure : ");
+  Serial.print(dados.bmp1Pressure);
+  // Serial.println(" Pa");
+  dados.bmp1Temp = bmp388.readTempC();
+  // Serial.print("Temperatura 2 : ");
+  // Serial.print(dados.bmp1Temp);
+  // Serial.println(" C");
+
+  dados.bmp1Altitude = bmp388.readAltitudeM();
+  Serial.println("Altitude");
+  Serial.println(dados.bmp1Altitude);
+}
+void lerPressao2() {
+  dados.bmp2Pressure = bmp388_2.readPressPa();
+  Serial.print("Pressure 2 : ");
+  Serial.print(dados.bmp2Pressure);
+  // Serial.println(" Pa");
+  dados.bmp2Temp = bmp388_2.readTempC();
+  // Serial.print("Temperatura 2 : ");
+  // Serial.print(dados.bmp2Temp);
+  // Serial.println(" C");
+
+  Serial.println("Altitude");
+  Serial.println(bmp388_2.readAltitudeM());
+}
+
+float lerLuz() {
+  float lux;
+  als.getALSLux(lux);
+  dados.luz = lux;
+  return dados.luz;
+}
+
+void inicializa() {
+  AbreServoSonda();
+}
+
+
+void enviaHardwarecheck() {
+  //sensor pressoa1
+  SerialAPC.print("Sensor de Pressão 1");
+  SerialAPC.println(hardwareCheck.sensorPressao1Check);
+  Serial.print("Sensor de Pressão 1 : ");
+  Serial.println(hardwareCheck.sensorPressao1Check);
+  //sensor pressao2
+  SerialAPC.print("Sensor de Pressão 2");
+  SerialAPC.println(hardwareCheck.sensorPressao2Check);
+  Serial.print("Sensor de Pressão 2");
+  Serial.println(hardwareCheck.sensorPressao2Check);
+
+  //sensor de luz
+
+  SerialAPC.print("Sensor de Luz");
+  SerialAPC.println(hardwareCheck.SensorLuzCheck);
+  Serial.print("Sensor de Luz");
+  Serial.println(hardwareCheck.SensorLuzCheck);
+  //acelerometro
+  SerialAPC.print("Sensor acelerometo");
+  SerialAPC.println(hardwareCheck.acelerometroCheck);
+  Serial.print("Sensor acelerometro");
+  Serial.println(hardwareCheck.acelerometroCheck);
+  //gps
+  SerialAPC.print("GPS ");
+  SerialAPC.println(hardwareCheck.gpsCheck);
+  Serial.print("GPS");
+  Serial.println(hardwareCheck.gpsCheck);
+
+  //apc220
+  SerialAPC.print("APC");
+  SerialAPC.println(hardwareCheck.apc220Check);
+  Serial.print("APC");
+  Serial.println(hardwareCheck.apc220Check);
+  //espnow
+  SerialAPC.print("Esp Now");
+  SerialAPC.println(hardwareCheck.EspNowCheck);
+  Serial.print("Esp Now");
+  Serial.println(hardwareCheck.EspNowCheck);
+}
+
+
+
+//a verificar
+bool isAlturaLancamentoSondas(double pressao) {
+  if (dados.isPontoMaisAlto == true & pressao > (dados.pressaoInicial - alturaLargadaPascal)) {
+    alturaLargada.push(1);
+    double avg;
+    for (int i = 0; i < 4; ++i) {
+
+      avg = +alturaLargada[i];
+    }
+
+    avg = avg / 4;
+    if (avg == 1) {
+      return true;
+    }
+
+
+
+  } else {
+
+    return false;
+  }
+}
+void estadoCheck() {
+  // estado= static_cast<estado>(preferences.getUInt("Estado", 0));
+  //
+  if (dados.isGPSSet == true & estado < 3) {
+    estado = GPS_READY;
+  }
+
+  //tem pressao inicial
+  if (dados.isPressaoInicial == true & estado < 4) {
+    estado = LAUNCH_READY;
+  }
+  if (dados.isLancado == true & estado < 5) {
+    estado = LAUNCH;
+  }
+  if (dados.isForaFoguete == true & estado < 6) {
+    estado = ROCKET_RELEASE;
+  }
+  if (dados.isPontoMaisAlto == true & estado < 7) {
+    estado = APOGGE;
+  }
+  if (dados.isParaquedasAberto == true & estado < 8) {
+    estado = PARCHUTE_OPEN;
+  }
+  if (dados.isSondasLancadas == true & estado < 9) {
+    estado = SONDA_RELEASE;
+  }
+  if (dados.isTOUCH_DOWN == true & estado < 10) {
+    estado = TOUCH_DOWN;
+  }
+int est=estado;
+  preferences.putUInt("Estado", estado);
+  Serial.print("estado :");
+  Serial.println(estado);
+}
+void lancasondas(double pressao) {
+  if (dados.isSondasLancadas == false) {
+    bool lanca = isAlturaLancamentoSondas(pressao);
+    if (lanca == true) {
+      AbreServoSonda();
+      dados.isSondasLancadas = true;
+    }
+  }
+}
+bool paraquedasAberto() {
+  //??? que dados devem dar o acelerometro para isto?????
+
+  return false;
+}
+void leTemperaturaExterior() {
+  if (paraquedasAberto() == true & dados.isServoTempExternaAberto == false) {
+    AbreServoTemp();
+    dados.isServoTempExternaAberto = true;
+  }
+}
+
+void testaServoTemp() {
+
+  AbreServoTemp();
+  delay(200);
+  FechaServoTemp();
+
+
+  delay(200);
+}
+
+void setup() {
+
+  //inicia serial
+  Serial.begin(9600);
+  //establece os codigos i2c dos bmp388
+
+
+  //inicia bmp1
+  if (bmp388.begin() == 0) {
+    hardwareCheck.sensorPressao1Check = true;
+  } else {
+    hardwareCheck.sensorPressao1Check = false;
+  }
+  bmp388.setSamplingMode(bmp388.eNormalPrecision2);
+  bmp388.calibratedAbsoluteDifference(altitudeInicial);
+
+  //inicia bmp2
+  if (bmp388_2.begin() == 0) {
+    hardwareCheck.sensorPressao2Check = true;
+  } else {
+    hardwareCheck.sensorPressao2Check = false;
+  }
+  bmp388_2.setSamplingMode(bmp388_2.eNormalPrecision2);
+
+  bmp388_2.calibratedAbsoluteDifference(altitudeInicial);
+  //inicia o veml7700
+  // als.begin();
+  // if (als()=="STATUS_ERROR") {
+  //   hardwareCheck.SensorLuzCheck = false;
+  // } else {
+  //   hardwareCheck.SensorLuzCheck = true;
+  // }
+
+
+  //Inicia o mpu6050 acelerometro
+  if (!mpu.begin()) {
+    hardwareCheck.acelerometroCheck = false;
+  } else {
+    hardwareCheck.acelerometroCheck = true;
+  }
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+
+
+  gps1.setup();
+  SerialAPC.begin(9600);
+  // if (!SerialAPC.begin(9600)) {
+  //   hardwareCheck.apc220Check = false;
+  // } else {
+  //   hardwareCheck.apc220Check = true;
+  // }
+
+  WiFi.mode(WIFI_STA);
+  //Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    hardwareCheck.EspNowCheck = false;
+  } else {
+    hardwareCheck.EspNowCheck = true;
+  }
+  //inicaliza sensor de temperatura externo
+  sensors.begin();
+  sensors.setResolution(9);
+
+
+  //inicializa servos
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
+  ServoSonda.setPeriodHertz(50);
+  ServoSonda.attach(14, 500, 3000);  // attaches the servo on pin 18 to the servo object
+  ServoTemp.setPeriodHertz(50);
+  ServoTemp.attach(27, 500, 3000);
+   ServoSonda.write(90);
+   delay(200);
+    ServoSonda.write(0);
+   delay(200);
+    ServoTemp.write(-180);
+   delay(200);
+   ServoTemp.write(0);
+   delay(200);
+  //inicializa preferencias
+  preferences.begin("Cansat", false);
+  Beep();
+  Beep();
+
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_register_recv_cb(OnDataRecv);
+
+  inicializa();
+ testaServoTemp();
+  enviaHardwarecheck();
+  // Inicio();
+}
+
+
+
+
+
+
+void loop() {
+
+  int interval;
+  unsigned long currentMillis = millis();
+  if (estado < 3) {
+    interval = intervalMission;
+  } else {
+
+    interval = intervalMission;
+  }
+  if (estado == TOUCH_DOWN) { interval = intervalStandby; }
+
+
+  if (currentMillis - previousMillis >= interval) {
+    // save the last time you blinked the LED
+    previousMillis = currentMillis;
+    estadoCheck();
+    dados.millisegundos = millis();
+    if (dados.millisegundos > 10000 & dados.millisegundos < 11000) { FechaServoSonda(); }
+    lerPressao1();  // put your main code here, to run repeatedly:
+    lerTemperaturaInterior();
+    leTemperaturaExterior();
+    lerAceleracao();
+    lerGPS();
+    mediaTemperatura();
+
+    lerPressao2();
+
+    trataPressao();
+    lancasondas(dados.pressaoNormalizada);
+
+
+    lerLuz();
+
+    lerSondas();
+
+    enviarDados();
+    //contador1+=;
+  
+  }
+}
