@@ -20,8 +20,8 @@ typedef struct sonda {
   float temp;
 } sonda;
 // REPLACE WITH THE RECEIVER'S MAC Address
-uint8_t broadcastAddress[] = { 0xaC, 0x67, 0xb2, 0x26, 0x6c, 0xe4 };
-//ac:67:b2:26:6c:e4
+uint8_t broadcastAddress[] = { 0x40, 0x22, 0xD8, 0x05, 0xA7, 0x48 };
+//40:22:D8:05:A7:48
 
 
 esp_now_peer_info_t peerInfo;
