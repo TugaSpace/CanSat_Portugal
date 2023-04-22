@@ -17,7 +17,7 @@ DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOVDD);
 typedef struct sonda {
   int id;
   float pressao;
-  float milliseconds;
+  int milliseconds;
 } sonda;
 // REPLACE WITH THE RECEIVER'S MAC Address
 uint8_t broadcastAddress[] = { 0x40, 0x22, 0xD8, 0x05, 0xA7, 0x48 };
