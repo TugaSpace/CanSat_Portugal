@@ -23,7 +23,7 @@
 #include <ESP32Servo.h>
 #include <Buzzer.h>
 
-//enumerations
+//estados do Cansat
 enum state { PRE_LAUNCH,
              GPS_READY,
              LAUNCH_READY,
@@ -37,21 +37,20 @@ enum state { PRE_LAUNCH,
 state estado = PRE_LAUNCH;
 //COnstantes
 
-//altitude inicial em metros
+//altitude inicial em metros para calibracao
 const float altitudeInicial = 115;
 
 //252 metro em Pascal
 const float alturaLargadaPascal = 3120;
 
-//COnstantes para smartdelay
 
-// Generally, you should use "unsigned long" for variables that hold time
-// The value will quickly become too large for an int to store
+//para contagem dos millsegundos
 unsigned long previousMillis = 0;  // will store last time LED was updated
 
-// constants won't change:
+//velocidade do loop
 const long intervalStandby = 1000;
 const long intervalMission = 250;
+const float velocidadeTerminal = 10;
 
 //estruturas
 
@@ -59,7 +58,8 @@ const long intervalMission = 250;
 typedef struct sonda {
   int id;
   float pressao;
-  float temp;
+  int milliseconds;
+  ;
 } sonda;
 
 //estrutura para fazer o check de harware
@@ -123,6 +123,7 @@ typedef struct Estrutura_dados {
   bool isParaquedasAberto = false;
   bool isGPSSet = false;
   bool isPontoMaisAlto = false;
+  bool isPontoMaisAltoGPS = false;
   bool isSondasLancadas = false;
   bool isPressaoInicial = false;
   bool isTOUCH_DOWN = false;
@@ -147,6 +148,9 @@ CircularBuffer<double, 4> pressao;
 CircularBuffer<int, 8> pressaoAltura;
 CircularBuffer<int, 3> pressaoAlturaAlcansada;
 CircularBuffer<int, 4> alturaLargada;
+CircularBuffer<double, 8> aceleracaoPontoMaisAlto;
+CircularBuffer<double, 4> aceleracaoParaquedas;
+CircularBuffer<int, 8> alturaMaximaGPS;
 Preferences preferences;
 
 
@@ -185,7 +189,7 @@ float prev_altitude = 0.0;
 float prev_velocity = 0.0;
 float prev_acceleration = 0.0;
 int contador1;
-float cabecalhoDados=true;
+float cabecalhoDados = true;
 
 //class gps tirada do CansatJr Creditos ao Breda e ao Filipe
 class Gps1 {
@@ -196,7 +200,7 @@ public:
   void setup() {
 
     //inicializa gps
-    serialGPS.begin(9600, SERIAL_8N1, 15, 4);
+    serialGPS.begin(9600, SERIAL_8N1, 4, 15);
     if (!serialGPS.available()) {
       hardwareCheck.gpsCheck = false;
     } else {
@@ -263,6 +267,40 @@ public:
   }
 } gps1;
 
+
+
+ bool isAltitudeMaximaGps( float gpsAltitude){
+
+if(gpsAltitude>dados.gps_Alt){
+
+ alturaMaximaGPS.push(1);
+
+}
+else{
+
+ alturaMaximaGPS.push(-1);
+
+
+}
+
+for (int i = 0; i < 8; i++) {
+
+    avg += alturaMaximaGPS[i];
+  }
+  avg = avg / 8;
+
+//para quando não tem dados suficientes
+  if (avg >= -0, 4 & avg <= 0, 4) {
+    
+      dados.isPontoMaisAlto = true;
+    
+     
+
+
+
+
+ }
+
 //usa 8 pontos para verificar se chegou a altitude máxima
 void isAltitudeMaxima(double pressao) {
   Serial.print("Isaltitude??");
@@ -287,21 +325,16 @@ void isAltitudeMaxima(double pressao) {
     avg += pressaoAltura[i];
   }
   avg = avg / 8;
-  Serial.print("avg");
-  Serial.println(avg);
 
-  if (avg >= -0, 5 & avg <= 0, 5) {
-    if (!pressaoAlturaAlcansada.isFull()) {
-      pressaoAlturaAlcansada.push(pressao);
-      dados.isPontoMaisAlto = false;
-    } else {
+
+  if (avg >= -0, 4 & avg <= 0, 4) {
+   
 
       dados.isPontoMaisAlto = true;
-    }
+   
   }
 
-  Serial.print("Ponta mais alto?? :");
-  Serial.println(dados.isPontoMaisAlto);
+  
 }
 
 //valor de erro bmp388 147782.31  84460.87//148305.17  83419.17
@@ -323,6 +356,10 @@ void trataPressao() {
     dados.isPressaoInicial = true;
     SerialAPC.print("Pressao inicial defenida");
     Serial.print("Pressao inicial defenida");
+    if (estado < 3) {
+      preferences.putDouble("Pressao", trataRPressao);
+      preferences.putbool("PressaoInicialSet", true);
+    }
     Beep();
     delay(100);
     Beep();
@@ -468,7 +505,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
   // Serial.printf("Board ID %u: %u bytes\n", myData.id, len);
   // Update the structures with the new incoming data
   boardsStruct[myData.id - 1].pressao = myData.pressao;
-  boardsStruct[myData.id - 1].temp = myData.temp;
+  boardsStruct[myData.id - 1].milliseconds = myData.milliseconds;
   //   Serial.printf("x value: %d \n", boardsStruct[myData.id - 1].pressao);
   //   Serial.printf("y value: %d \n", boardsStruct[myData.id - 1].temp);
   //   Serial.println();
@@ -488,57 +525,56 @@ void lerTemperaturaInterior() {
   Serial.println("ºC");
 }
 void enviarDados() {
-if(cabecalhoDados==true){
- SerialAPC.print("/*");
-  //1
-  SerialAPC.print("tempo");
-  SerialAPC.print(",");
-  //2
-  SerialAPC.print("Pressao");
-  SerialAPC.print(",");
-  //3
-  SerialAPC.print("Temperatura");
-  SerialAPC.print(",");
+  if (cabecalhoDados == true) {
+    SerialAPC.print("/*");
+    //1
+    SerialAPC.print("tempo");
+    SerialAPC.print(",");
+    //2
+    SerialAPC.print("Pressao");
+    SerialAPC.print(",");
+    //3
+    SerialAPC.print("Temperatura");
+    SerialAPC.print(",");
 
-  //4
-  SerialAPC.print("Latitude ");
-  SerialAPC.print(",");
-  //5
-  SerialAPC.print("Longitude");
-  SerialAPC.print(",");
+    //4
+    SerialAPC.print("Latitude ");
+    SerialAPC.print(",");
+    //5
+    SerialAPC.print("Longitude");
+    SerialAPC.print(",");
 
-  //6
-  SerialAPC.print("AltitudeGPS");
-  SerialAPC.print(",");
-  //7
-  SerialAPC.print("Luz");
-  SerialAPC.print(",");
-  //8
-  SerialAPC.print("aceleracaox");
-  SerialAPC.print(",");
-  //9
-  SerialAPC.print("aceleracaoy");
-  SerialAPC.print(",");
-  //10
-  SerialAPC.print("temperaturaExterior");
-  SerialAPC.print(",");
-  //11
-  SerialAPC.print("aceleracaoz");
-  SerialAPC.print(",");
- SerialAPC.print("Sonda1 Tempo");
-  SerialAPC.print(",");
-  //16
-  SerialAPC.print("Sonda1 Pressao");
-  SerialAPC.print(",");
-  //17
-  SerialAPC.print("Sonda 2 tempo");
-  SerialAPC.print(",");
-  //18
-  SerialAPC.print("Sonda 2 Pressao");
-  SerialAPC.println("*/");
-cabecalhoDados=false;
-
-}
+    //6
+    SerialAPC.print("AltitudeGPS");
+    SerialAPC.print(",");
+    //7
+    SerialAPC.print("Luz");
+    SerialAPC.print(",");
+    //8
+    SerialAPC.print("aceleracaox");
+    SerialAPC.print(",");
+    //9
+    SerialAPC.print("aceleracaoy");
+    SerialAPC.print(",");
+    //10
+    SerialAPC.print("temperaturaExterior");
+    SerialAPC.print(",");
+    //11
+    SerialAPC.print("aceleracaoz");
+    SerialAPC.print(",");
+    SerialAPC.print("Sonda1 Tempo");
+    SerialAPC.print(",");
+    //16
+    SerialAPC.print("Sonda1 Pressao");
+    SerialAPC.print(",");
+    //17
+    SerialAPC.print("Sonda 2 tempo");
+    SerialAPC.print(",");
+    //18
+    SerialAPC.print("Sonda 2 Pressao");
+    SerialAPC.println("*/");
+    cabecalhoDados = false;
+  }
 
 
 
@@ -629,6 +665,8 @@ void lerAceleracao() {
   dados.aceleracaoTotal = sqrt(pow(dados.acel_x, 2) + pow(dados.acel_y, 2) + pow(dados.acel_z, 2));
   Serial.print("Aceleração total: ");
   Serial.println(dados.aceleracaoTotal);
+
+  //??
   if (estado == LAUNCH_READY & (dados.aceleracaoTotal > 30 || dados.pressaoNormalizada < dados.pressaoInicial - 300)) {
 
     dados.isLancado = true;
@@ -671,6 +709,7 @@ float lerLuz() {
   float lux;
   als.getALSLux(lux);
   dados.luz = lux;
+
   return dados.luz;
 }
 
@@ -745,36 +784,47 @@ bool isAlturaLancamentoSondas(double pressao) {
   }
 }
 void estadoCheck() {
-  // estado= static_cast<estado>(preferences.getUInt("Estado", 0));
+
+  // estado =static_cast<state>(preferences.getUInt("Estado", 0));
+  // Serial.print("Estado :");
+
+
   //
   if (dados.isGPSSet == true & estado < 3) {
     estado = GPS_READY;
   }
 
   //tem pressao inicial
-  if (dados.isPressaoInicial == true & estado < 4) {
+  if (dados.isPressaoInicial == true & estado < 3) {
     estado = LAUNCH_READY;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isLancado == true & estado < 5) {
+  if (dados.isLancado == true & estado < 4) {
     estado = LAUNCH;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isForaFoguete == true & estado < 6) {
+  if (dados.isForaFoguete == true & estado < 5) {
     estado = ROCKET_RELEASE;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isPontoMaisAlto == true & estado < 7) {
+  if (dados.isPontoMaisAlto == true & estado < 6) {
     estado = APOGGE;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isParaquedasAberto == true & estado < 8) {
+  if (dados.isParaquedasAberto == true & estado < 7) {
     estado = PARCHUTE_OPEN;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isSondasLancadas == true & estado < 9) {
+  if (dados.isSondasLancadas == true & estado < 8) {
     estado = SONDA_RELEASE;
+    preferences.putUInt("Estado", estado);
   }
-  if (dados.isTOUCH_DOWN == true & estado < 10) {
+  if (dados.isTOUCH_DOWN == true & estado < 9) {
     estado = TOUCH_DOWN;
+    preferences.putUInt("Estado", estado);
   }
-int est=estado;
-  preferences.putUInt("Estado", estado);
+  int est = estado;
+
   Serial.print("estado :");
   Serial.println(estado);
 }
@@ -884,16 +934,21 @@ void setup() {
   ServoSonda.attach(14, 500, 3000);  // attaches the servo on pin 18 to the servo object
   ServoTemp.setPeriodHertz(50);
   ServoTemp.attach(27, 500, 3000);
-   ServoSonda.write(90);
-   delay(200);
-    ServoSonda.write(0);
-   delay(200);
-    ServoTemp.write(-180);
-   delay(200);
-   ServoTemp.write(0);
-   delay(200);
+  ServoSonda.write(90);
+  delay(200);
+  ServoSonda.write(0);
+  delay(200);
+  ServoTemp.write(-180);
+  delay(200);
+  ServoTemp.write(0);
+  delay(200);
   //inicializa preferencias
   preferences.begin("Cansat", false);
+  estado = static_cast<state>(preferences.getUInt("Estado", 0));
+  if (estado > 2) {
+    dados.pressaoInicial = preferences.getDouble("Pressao", 10000);
+  }
+
   Beep();
   Beep();
 
@@ -902,7 +957,7 @@ void setup() {
   esp_now_register_recv_cb(OnDataRecv);
 
   inicializa();
- testaServoTemp();
+  testaServoTemp();
   enviaHardwarecheck();
   // Inicio();
 }
@@ -917,7 +972,7 @@ void loop() {
   int interval;
   unsigned long currentMillis = millis();
   if (estado < 3) {
-    interval = intervalMission;
+    interval = intervalStandby;
   } else {
 
     interval = intervalMission;
@@ -950,6 +1005,5 @@ void loop() {
 
     enviarDados();
     //contador1+=;
-  
   }
 }
