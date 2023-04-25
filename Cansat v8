@@ -328,10 +328,12 @@ void isAltitudeMaxima(double pressao) {
 
 
   if (avg >= -0, 4 && avg <= 0, 4) {
+if(dados.isPontoMaisAlto ==false){estado = APOGGE;
+ dados.isPontoMaisAlto = true;
+}
 
-
-    dados.isPontoMaisAlto = true;
-    estado = APOGGE;
+  
+   
   }
 }
 
@@ -791,7 +793,7 @@ void lancasondas(double pressao) {
 }
 
 void leTemperaturaExterior() {
-  if (paraquedasAberto() == true && dados.isServoTempExternaAberto == false) {
+  if (dados.isParaquedasAberto == true && dados.isServoTempExternaAberto == false) {
     AbreServoTemp();
     dados.isServoTempExternaAberto = true;
   }
@@ -959,3 +961,4 @@ void loop() {
     //contador1+=;
   }
 }
+
