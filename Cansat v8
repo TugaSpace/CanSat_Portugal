@@ -5,7 +5,7 @@
 #include "SPI.h"
 #include "math.h"
 #include "CircularBuffer.h"
-#include <Preferences.h>
+//#include <Preferences.h>
 
 
 //Bibliotecas de sensores
@@ -151,7 +151,7 @@ CircularBuffer<int, 4> alturaLargada;
 CircularBuffer<double, 8> aceleracaoPontoMaisAlto;
 CircularBuffer<double, 4> aceleracaoParaquedas;
 CircularBuffer<int, 8> alturaMaximaGPS;
-Preferences preferences;
+//Preferences preferences;
 
 
 // GPIO where the DS18B20 is connected to
@@ -259,7 +259,7 @@ public:
   bool isGPSFix() {
     float _lat = _parser.location.lat();
     float _long = _parser.location.lng();
-    if (_lat != 0 & _long != 0) {
+    if (_lat != 0 && _long != 0) {
       return true;
     } else {
       return false;
@@ -269,38 +269,38 @@ public:
 
 
 
- bool isAltitudeMaximaGps( float gpsAltitude){
+//  bool isAltitudeMaximaGps( float gpsAltitude){
 
-if(gpsAltitude>dados.gps_Alt){
+// if(gpsAltitude>dados.gps_Alt){
 
- alturaMaximaGPS.push(1);
+//  alturaMaximaGPS.push(1);
 
-}
-else{
+// }
+// else{
 
- alturaMaximaGPS.push(-1);
+//  alturaMaximaGPS.push(-1);
 
 
-}
+// }
+// float avg;
+// for (int i = 0; i < 8; i++) {
 
-for (int i = 0; i < 8; i++) {
+//     avg += alturaMaximaGPS[i];
+//   }
+//   avg = avg / 8;
 
-    avg += alturaMaximaGPS[i];
-  }
-  avg = avg / 8;
+// //para quando não tem dados suficientes
+//   if (avg >= -0, 4 && avg <= 0, 4) {
 
-//para quando não tem dados suficientes
-  if (avg >= -0, 4 & avg <= 0, 4) {
-    
-      dados.isPontoMaisAlto = true;
-    
-     
+//       dados.isPontoMaisAlto = true;
 
 
 
 
- }
 
+
+//  }
+//}
 //usa 8 pontos para verificar se chegou a altitude máxima
 void isAltitudeMaxima(double pressao) {
   Serial.print("Isaltitude??");
@@ -327,14 +327,12 @@ void isAltitudeMaxima(double pressao) {
   avg = avg / 8;
 
 
-  if (avg >= -0, 4 & avg <= 0, 4) {
-   
+  if (avg >= -0, 4 && avg <= 0, 4) {
 
-      dados.isPontoMaisAlto = true;
-   
+
+    dados.isPontoMaisAlto = true;
+    estado = APOGGE;
   }
-
-  
 }
 
 //valor de erro bmp388 147782.31  84460.87//148305.17  83419.17
@@ -351,15 +349,15 @@ void trataPressao() {
   double mediaPressao = (dados.bmp1Pressure + dados.bmp2Pressure) / 2;
   pressao.push(mediaPressao);
   trataRPressao = (pressao[0] + pressao[1] + pressao[2] + pressao[3]) / 4;
-  if (millis() > 20000 & dados.isPressaoInicial == false) {
+  if (millis() > 20000 && dados.isPressaoInicial == false) {
     dados.pressaoInicial = trataRPressao;
     dados.isPressaoInicial = true;
     SerialAPC.print("Pressao inicial defenida");
     Serial.print("Pressao inicial defenida");
-    if (estado < 3) {
-      preferences.putDouble("Pressao", trataRPressao);
-      preferences.putbool("PressaoInicialSet", true);
-    }
+    // if (estado < 3) {
+    //   preferences.putDouble("Pressao", trataRPressao);
+    //   preferences.putBool("PressaoInicialSet", true);
+    // }
     Beep();
     delay(100);
     Beep();
@@ -367,19 +365,19 @@ void trataPressao() {
     Beep();
     delay(100);
   }
-  //verifica se há 50 metros de altura
-  if (dados.isPressaoInicial == true & dados.pressaoInicial - trataRPressao > 600) {  //valor deve ser 600
+  //verifica se há 5780 metros de altura
+  if (dados.isPressaoInicial == true && dados.pressaoInicial - trataRPressao > 600) {  //valor deve ser 600
     //trata a pressao normalizada na funcao isAltitudeMaxima();
     isAltitudeMaxima(trataRPressao);
   } else {
     dados.pressaoNormalizada = trataRPressao;
   }
 }
-double mediaTemperatura() {
+void mediaTemperatura() {
   double tempBmp1, tempBmp2;
   tempBmp1 = dados.bmp1Temp;
   tempBmp2 = dados.bmp2Temp;
-  return (tempBmp1 + tempBmp2) / 2;
+  dados.mediaTemp = (tempBmp1 + tempBmp2) / 2;
 }
 void Beep() {
   buzzer.begin(0);
@@ -517,66 +515,11 @@ void lerSondas() {
 }
 
 /* Globals */
-void lerTemperaturaInterior() {
+void lerTemperaturaExterior() {
   sensors.requestTemperatures();
-  float temperatureC = sensors.getTempCByIndex(0);
-  Serial.print("Temperatura dallas");
-  Serial.print(temperatureC);
-  Serial.println("ºC");
+  dados.tempExt = sensors.getTempCByIndex(0);
 }
 void enviarDados() {
-  if (cabecalhoDados == true) {
-    SerialAPC.print("/*");
-    //1
-    SerialAPC.print("tempo");
-    SerialAPC.print(",");
-    //2
-    SerialAPC.print("Pressao");
-    SerialAPC.print(",");
-    //3
-    SerialAPC.print("Temperatura");
-    SerialAPC.print(",");
-
-    //4
-    SerialAPC.print("Latitude ");
-    SerialAPC.print(",");
-    //5
-    SerialAPC.print("Longitude");
-    SerialAPC.print(",");
-
-    //6
-    SerialAPC.print("AltitudeGPS");
-    SerialAPC.print(",");
-    //7
-    SerialAPC.print("Luz");
-    SerialAPC.print(",");
-    //8
-    SerialAPC.print("aceleracaox");
-    SerialAPC.print(",");
-    //9
-    SerialAPC.print("aceleracaoy");
-    SerialAPC.print(",");
-    //10
-    SerialAPC.print("temperaturaExterior");
-    SerialAPC.print(",");
-    //11
-    SerialAPC.print("aceleracaoz");
-    SerialAPC.print(",");
-    SerialAPC.print("Sonda1 Tempo");
-    SerialAPC.print(",");
-    //16
-    SerialAPC.print("Sonda1 Pressao");
-    SerialAPC.print(",");
-    //17
-    SerialAPC.print("Sonda 2 tempo");
-    SerialAPC.print(",");
-    //18
-    SerialAPC.print("Sonda 2 Pressao");
-    SerialAPC.println("*/");
-    cabecalhoDados = false;
-  }
-
-
 
   SerialAPC.print("/*");
   //1
@@ -586,55 +529,46 @@ void enviarDados() {
   SerialAPC.print(dados.pressaoNormalizada);
   SerialAPC.print(",");
   //3
-  SerialAPC.print(dados.mediaTemp);
+
+  SerialAPC.print(dados.tempExt);
   SerialAPC.print(",");
 
   //4
+  SerialAPC.print(dados.mediaTemp);
+  SerialAPC.print(",");
+
+  //5
   SerialAPC.print(dados.gps_Lat, 6);
   SerialAPC.print(",");
-  //5
+  //6
   SerialAPC.print(dados.gps_Long, 6);
   SerialAPC.print(",");
 
-  //6
+  //7
   SerialAPC.print(dados.gps_Alt);
   SerialAPC.print(",");
-  //7
+  //8
   SerialAPC.print(dados.luz);
   SerialAPC.print(",");
-  //8
-  SerialAPC.print(dados.acel_x);
-  SerialAPC.print(",");
   //9
-  SerialAPC.print(dados.acel_y);
+  SerialAPC.print(dados.aceleracaoTotal);
   SerialAPC.print(",");
   //10
-  SerialAPC.print(dados.bmp2Temp);
-  SerialAPC.print(",");
-  //11
-  SerialAPC.print(dados.acel_z);
-  SerialAPC.print(",");
-  //12
-  // SerialAPC.print(dados.gyro_x);
-  // SerialAPC.print(",");
-  // //13
-  // SerialAPC.print(dados.gyro_y);
-  // SerialAPC.print(",");
-  // //14
-  // SerialAPC.print(dados.gyro_z);
-  // SerialAPC.print(",");
 
-  //15
   SerialAPC.print(dados.sonda1_millisegundos);
   SerialAPC.print(",");
-  //16
-  SerialAPC.print(dados.sonda1_Pressure);
-  SerialAPC.print(",");
-  //17
+  //11
+
+
   SerialAPC.print(dados.sonda2_millisegundos);
   SerialAPC.print(",");
-  //18
+  //12
+  SerialAPC.print(dados.sonda1_Pressure);
+  SerialAPC.print(",");
+  //13
   SerialAPC.print(dados.sonda2_Pressure);
+  SerialAPC.print(",");
+  SerialAPC.print(estado);
   SerialAPC.println("*/");
 }
 
@@ -667,11 +601,19 @@ void lerAceleracao() {
   Serial.println(dados.aceleracaoTotal);
 
   //??
-  if (estado == LAUNCH_READY & (dados.aceleracaoTotal > 30 || dados.pressaoNormalizada < dados.pressaoInicial - 300)) {
+  if (estado == LAUNCH_READY && dados.pressaoNormalizada < (dados.pressaoInicial - 300)) {
 
     dados.isLancado = true;
-    estado = LAUNCH;
+    //estado = LAUNCH;
     dados.luzLancamento = lerLuz();
+  }
+
+
+
+  if (estado == APOGGE && dados.aceleracaoTotal < 15) {
+    dados.isParaquedasAberto = true;
+    estado = PARCHUTE_OPEN;
+    AbreServoTemp();
   }
 }
 
@@ -709,6 +651,12 @@ float lerLuz() {
   float lux;
   als.getALSLux(lux);
   dados.luz = lux;
+  if (estado>2 && dados.luz > 2 * dados.luzLancamento) {
+    dados.isForaFoguete = true;
+    estado = ROCKET_RELEASE;
+  }
+
+
 
   return dados.luz;
 }
@@ -763,7 +711,7 @@ void enviaHardwarecheck() {
 
 //a verificar
 bool isAlturaLancamentoSondas(double pressao) {
-  if (dados.isPontoMaisAlto == true & pressao > (dados.pressaoInicial - alturaLargadaPascal)) {
+  if (dados.isPontoMaisAlto == true && (pressao > (dados.pressaoInicial - alturaLargadaPascal))) {
     alturaLargada.push(1);
     double avg;
     for (int i = 0; i < 4; ++i) {
@@ -790,38 +738,38 @@ void estadoCheck() {
 
 
   //
-  if (dados.isGPSSet == true & estado < 3) {
+  if (dados.isGPSSet == true && estado < 3) {
     estado = GPS_READY;
   }
 
   //tem pressao inicial
-  if (dados.isPressaoInicial == true & estado < 3) {
+  if (dados.isPressaoInicial == true && estado < 3) {
     estado = LAUNCH_READY;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
-  if (dados.isLancado == true & estado < 4) {
+  if (dados.isLancado == true && estado < 4) {
     estado = LAUNCH;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
-  if (dados.isForaFoguete == true & estado < 5) {
+  if (dados.isForaFoguete == true && estado < 5) {
     estado = ROCKET_RELEASE;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
-  if (dados.isPontoMaisAlto == true & estado < 6) {
+  if (dados.isPontoMaisAlto == true && estado < 6) {
     estado = APOGGE;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
-  if (dados.isParaquedasAberto == true & estado < 7) {
+  if (dados.isParaquedasAberto == true && estado < 7) {
     estado = PARCHUTE_OPEN;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
-  if (dados.isSondasLancadas == true & estado < 8) {
+  if (dados.isSondasLancadas == true && estado < 8) {
     estado = SONDA_RELEASE;
-    preferences.putUInt("Estado", estado);
+    // preferences.putUInt("Estado", estado);
   }
-  if (dados.isTOUCH_DOWN == true & estado < 9) {
+  if (dados.isTOUCH_DOWN == true && estado < 9) {
     estado = TOUCH_DOWN;
-    preferences.putUInt("Estado", estado);
+    //preferences.putUInt("Estado", estado);
   }
   int est = estado;
 
@@ -834,6 +782,7 @@ void lancasondas(double pressao) {
     if (lanca == true) {
       AbreServoSonda();
       dados.isSondasLancadas = true;
+      estado = TOUCH_DOWN;
     }
   }
 }
@@ -843,7 +792,7 @@ bool paraquedasAberto() {
   return false;
 }
 void leTemperaturaExterior() {
-  if (paraquedasAberto() == true & dados.isServoTempExternaAberto == false) {
+  if (paraquedasAberto() == true && dados.isServoTempExternaAberto == false) {
     AbreServoTemp();
     dados.isServoTempExternaAberto = true;
   }
@@ -943,11 +892,11 @@ void setup() {
   ServoTemp.write(0);
   delay(200);
   //inicializa preferencias
-  preferences.begin("Cansat", false);
-  estado = static_cast<state>(preferences.getUInt("Estado", 0));
-  if (estado > 2) {
-    dados.pressaoInicial = preferences.getDouble("Pressao", 10000);
-  }
+  // preferences.begin("Cansat", false);
+  // estado = static_cast<state>(preferences.getUInt("Estado", 0));
+  // if (estado > 2) {
+  //   dados.pressaoInicial = preferences.getDouble("Pressao", 10000);
+  // }
 
   Beep();
   Beep();
@@ -977,7 +926,11 @@ void loop() {
 
     interval = intervalMission;
   }
-  if (estado == TOUCH_DOWN) { interval = intervalStandby; }
+  if (estado == TOUCH_DOWN) {
+    buzzer.begin(0);
+    buzzer.sound(NOTE_A3, 200);
+    buzzer.end(100);
+  }
 
 
   if (currentMillis - previousMillis >= interval) {
@@ -985,10 +938,10 @@ void loop() {
     previousMillis = currentMillis;
     estadoCheck();
     dados.millisegundos = millis();
-    if (dados.millisegundos > 10000 & dados.millisegundos < 11000) { FechaServoSonda(); }
+    if (dados.millisegundos > 10000 && dados.millisegundos < 11000) { FechaServoSonda(); }
     lerPressao1();  // put your main code here, to run repeatedly:
-    lerTemperaturaInterior();
-    leTemperaturaExterior();
+
+    lerTemperaturaExterior();
     lerAceleracao();
     lerGPS();
     mediaTemperatura();
