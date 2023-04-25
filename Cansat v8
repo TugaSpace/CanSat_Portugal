@@ -354,18 +354,14 @@ void trataPressao() {
   if (millis() > 20000 && dados.isPressaoInicial == false) {
     dados.pressaoInicial = trataRPressao;
     dados.isPressaoInicial = true;
+    estado=LAUNCH_READY;
     SerialAPC.print("Pressao inicial defenida");
     Serial.print("Pressao inicial defenida");
     // if (estado < 3) {
     //   preferences.putDouble("Pressao", trataRPressao);
     //   preferences.putBool("PressaoInicialSet", true);
     // }
-    Beep();
-    delay(100);
-    Beep();
-    delay(100);
-    Beep();
-    delay(100);
+  
   }
   //verifica se há 5780 metros de altura
   if (dados.isPressaoInicial == true && dados.pressaoInicial - trataRPressao > 600) {  //valor deve ser 600
@@ -486,12 +482,12 @@ void FechaServoTemp() {
   delay(250);
 }
 void AbreServoSonda() {
-  ServoSonda.write(0);
+  ServoSonda.write(90);
   dados.isServoSondaAberto = true;
   delay(250);
 }
 void FechaServoSonda() {
-  ServoSonda.write(90);
+  ServoSonda.write(180);
   dados.isServoSondaAberto = false;
   delay(250);
 }
@@ -577,15 +573,19 @@ void enviarDados() {
 void lerGPS() {
   gps1.parsePending();
 
-  dados.isGPSSet = gps1.isGPSFix();
 
   dados.gps_Lat = gps1.latitude();
 
   dados.gps_Long = gps1.longitude();
 
   dados.gps_Alt = gps1.altitudeMeters();
-   if (dados.isGPSSet == true && estado < 3) {
-    estado = GPS_READY;
+   if (dados.isGPSSet == false && estado < 3) {
+      dados.isGPSSet = gps1.isGPSFix();
+      if(dados.isGPSSet==true){
+        estado = GPS_READY;
+      }
+
+    
   }
 }
 
@@ -615,7 +615,7 @@ void lerAceleracao() {
 
 
 
-  if (estado == APOGGE && dados.aceleracaoTotal < 15 && dados.isParaquedasAberto = false;) {
+  if (estado == APOGGE && dados.aceleracaoTotal < 15 && dados.isParaquedasAberto == false) {
     dados.isParaquedasAberto = true;
     estado = PARCHUTE_OPEN;
     AbreServoTemp();
@@ -656,7 +656,7 @@ float lerLuz() {
   float lux;
   als.getALSLux(lux);
   dados.luz = lux;
-  if (estado>2 && dados.luz > 2 * dados.luzLancamento &&   dados.isForaFoguete = false;) {
+  if (estado>2 && dados.luz > 2 * dados.luzLancamento &&   dados.isForaFoguete == false) {
     dados.isForaFoguete = true;
     estado = ROCKET_RELEASE;
   }
@@ -782,7 +782,7 @@ void estadoCheck() {
   Serial.println(estado);
 }
 void lancasondas(double pressao) {
-  if (dados.isSondasLancadas == false && dados.isAltitudeMaxima=true) {
+  if (dados.isSondasLancadas == false && dados.isPontoMaisAlto==true) {
     bool lanca = isAlturaLancamentoSondas(pressao);
     if (lanca == true) {
       AbreServoSonda();
@@ -884,14 +884,14 @@ void setup() {
   ServoSonda.attach(14, 500, 3000);  // attaches the servo on pin 18 to the servo object
   ServoTemp.setPeriodHertz(50);
   ServoTemp.attach(27, 500, 3000);
-  ServoSonda.write(90);
-  delay(200);
   ServoSonda.write(0);
-  delay(200);
-  ServoTemp.write(-180);
-  delay(200);
-  ServoTemp.write(0);
-  delay(200);
+  delay(1000);
+  ServoSonda.write(90);
+  delay(1000);
+  // ServoTemp.write(-180);
+  // delay(1000);
+  // ServoTemp.write(0);
+  // delay(1000);
   //inicializa preferencias
   // preferences.begin("Cansat", false);
   // estado = static_cast<state>(preferences.getUInt("Estado", 0));
@@ -899,8 +899,7 @@ void setup() {
   //   dados.pressaoInicial = preferences.getDouble("Pressao", 10000);
   // }
 
-  Beep();
-  Beep();
+
 
   // Once ESPNow is successfully Init, we will register for recv CB to
   // get recv packer info
@@ -961,4 +960,3 @@ void loop() {
     //contador1+=;
   }
 }
-
