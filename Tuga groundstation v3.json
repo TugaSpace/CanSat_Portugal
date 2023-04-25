@@ -1,0 +1,240 @@
+{
+    "frameEnd": "",
+    "frameStart": "",
+    "groups": [
+        {
+            "datasets": [
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Tempo CanSat",
+                    "units": "",
+                    "value": "%1",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Pressao CanSat",
+                    "units": "",
+                    "value": "%2",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Temperatura Exterior",
+                    "units": "",
+                    "value": "%3",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Temperatura Interior",
+                    "units": "",
+                    "value": "%4",
+                    "widget": ""
+                }
+            ],
+            "title": "CanSat",
+            "widget": ""
+        },
+        {
+            "datasets": [
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Latitude",
+                    "units": "°",
+                    "value": "%5",
+                    "widget": "lat"
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Longitude",
+                    "units": "°",
+                    "value": "%6",
+                    "widget": "lon"
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Altitude",
+                    "units": "m",
+                    "value": "%7",
+                    "widget": "alt"
+                }
+            ],
+            "title": "GPS",
+            "widget": "map"
+        },
+        {
+            "datasets": [
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Luz",
+                    "units": "",
+                    "value": "%8",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Aceleração Total",
+                    "units": "",
+                    "value": "%9",
+                    "widget": ""
+                }
+            ],
+            "title": "CanSat Luz e Aceleração",
+            "widget": ""
+        },
+        {
+            "datasets": [
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "sonda1",
+                    "units": "",
+                    "value": "%10",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "sonda2",
+                    "units": "",
+                    "value": "%11",
+                    "widget": ""
+                }
+            ],
+            "title": "Tempo Sondas",
+            "widget": ""
+        },
+        {
+            "datasets": [
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Sonda1",
+                    "units": "",
+                    "value": "%12",
+                    "widget": ""
+                },
+                {
+                    "alarm": 0,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": true,
+                    "led": false,
+                    "log": false,
+                    "max": 0,
+                    "min": 0,
+                    "title": "Sonda2",
+                    "units": "",
+                    "value": "%13",
+                    "widget": ""
+                }
+            ],
+            "title": "Pressão Sondas",
+            "widget": ""
+        },
+        {
+            "datasets": [
+                {
+                    "alarm": 8,
+                    "fft": false,
+                    "fftSamples": 1024,
+                    "graph": false,
+                    "led": false,
+                    "log": false,
+                    "max": 8,
+                    "min": 0,
+                    "title": "Estado",
+                    "units": "",
+                    "value": "%14",
+                    "widget": "gauge"
+                }
+            ],
+            "title": "Estado",
+            "widget": ""
+        }
+    ],
+    "separator": "",
+    "title": "Tugav3"
+}
