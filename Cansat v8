@@ -327,7 +327,7 @@ void isAltitudeMaxima(double pressao) {
   avg = avg / 8;
 
 
-  if (avg >= -0, 4 && avg <= 0, 4) {
+  if (avg >= 0) {
 if(dados.isPontoMaisAlto ==false){estado = APOGGE;
  dados.isPontoMaisAlto = true;
 }
