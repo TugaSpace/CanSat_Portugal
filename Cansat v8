@@ -717,15 +717,7 @@ void enviaHardwarecheck() {
 //a verificar
 bool isAlturaLancamentoSondas(double pressao) {
   if (dados.isPontoMaisAlto == true && (pressao > (dados.pressaoInicial - alturaLargadaPascal))) {
-    alturaLargada.push(1);
-    double avg;
-    for (int i = 0; i < 4; ++i) {
-
-      avg = +alturaLargada[i];
-    }
-
-    avg = avg / 4;
-    if (avg == 1) {
+    
       return true;
     }
 
