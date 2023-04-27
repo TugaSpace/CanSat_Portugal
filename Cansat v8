@@ -41,7 +41,7 @@ state estado = PRE_LAUNCH;
 const float altitudeInicial = 115;
 
 //252 metro em Pascal
-const float alturaLargadaPascal = 3120;
+const float alturaLargadaPascal = 2380;//200 METROS
 
 
 //para contagem dos millsegundos
