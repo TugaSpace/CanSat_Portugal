@@ -41,8 +41,8 @@ state estado = PRE_LAUNCH;
 const float altitudeInicial = 115;
 
 //252 metro em Pascal
-const float alturaLargadaPascal = 2380;//200 METROS
-
+const float alturaLargadaPascal = 719;//60 METROS
+const float altutaPassagemPascal=2379;
 
 //para contagem dos millsegundos
 unsigned long previousMillis = 0;  // will store last time LED was updated
@@ -190,7 +190,7 @@ float prev_velocity = 0.0;
 float prev_acceleration = 0.0;
 int contador1;
 float cabecalhoDados = true;
-
+float passou=false;
 //class gps tirada do CansatJr Creditos ao Breda e ao Filipe
 class Gps1 {
 private:
@@ -364,9 +364,11 @@ void trataPressao() {
   
   }
   //verifica se há 5780 metros de altura
-  if (dados.isPressaoInicial == true && dados.pressaoInicial - trataRPressao > 600) {  //valor deve ser 600
+  if (dados.isPressaoInicial == true && dados.pressaoInicial - trataRPressao > altutaPassagemPascal) {  //valor deve ser 600
     //trata a pressao normalizada na funcao isAltitudeMaxima();
     isAltitudeMaxima(trataRPressao);
+    passou=true;
+
   } else {
     dados.pressaoNormalizada = trataRPressao;
   }
@@ -618,7 +620,7 @@ void lerAceleracao() {
   if (estado == APOGGE && dados.aceleracaoTotal < 15 && dados.isParaquedasAberto == false) {
     dados.isParaquedasAberto = true;
     estado = PARCHUTE_OPEN;
-    AbreServoTemp();
+    //AbreServoTemp();
   }
 }
 
@@ -667,7 +669,7 @@ float lerLuz() {
 }
 
 void inicializa() {
-  AbreServoSonda();
+  //AbreServoSonda();
 }
 
 
@@ -716,18 +718,17 @@ void enviaHardwarecheck() {
 
 //a verificar
 bool isAlturaLancamentoSondas(double pressao) {
-  if (dados.isPontoMaisAlto == true && (pressao > (dados.pressaoInicial - alturaLargadaPascal))) {
+  if (passou == true && (pressao > (dados.pressaoInicial - alturaLargadaPascal))) {
     
       return true;
-    }
-
-
-
   } else {
 
     return false;
   }
 }
+}
+
+
 void estadoCheck() {
 
   // estado =static_cast<state>(preferences.getUInt("Estado", 0));
@@ -789,16 +790,6 @@ void leTemperaturaExterior() {
     AbreServoTemp();
     dados.isServoTempExternaAberto = true;
   }
-}
-
-void testaServoTemp() {
-
-  AbreServoTemp();
-  delay(200);
-  FechaServoTemp();
-
-
-  delay(200);
 }
 
 void setup() {
@@ -876,10 +867,7 @@ void setup() {
   ServoSonda.attach(14, 500, 3000);  // attaches the servo on pin 18 to the servo object
   ServoTemp.setPeriodHertz(50);
   ServoTemp.attach(27, 500, 3000);
-  ServoSonda.write(0);
-  delay(1000);
-  ServoSonda.write(90);
-  delay(1000);
+ 
   // ServoTemp.write(-180);
   // delay(1000);
   // ServoTemp.write(0);
@@ -918,7 +906,7 @@ void loop() {
 
     interval = intervalMission;
   }
-  if (estado == TOUCH_DOWN) {
+  if ( dados.isSondasLancadas==true;) {
     buzzer.begin(0);
     buzzer.sound(NOTE_A3, 200);
     buzzer.end(100);
@@ -952,3 +940,4 @@ void loop() {
     //contador1+=;
   }
 }
+
